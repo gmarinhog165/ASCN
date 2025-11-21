@@ -1,0 +1,37 @@
+# Playbook to deploy Moonshot and its components
+
+# TO DO
+
+- name: Setup k8s storage
+  hosts: localhost 
+  gather_facts: no
+  vars:
+    reset: true
+  roles:
+    - role: install-k8s
+    - role: create-node-dir
+    - role: k8s-storage
+
+- name: Deploy database
+  hosts: localhost  
+  gather_facts: no
+  roles:
+    - role: postgres-deployment
+    - role: postgres-pvc
+    - role: postgres-service
+
+- name: Deploy moonshot and populate data
+  hosts: localhost
+  gather_facts: no
+  roles:
+    - role: moonshot-service
+    - role: run_moonshot
+
+- name: Deploy hpa
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Deploy HPA role if not skipped
+      import_role:
+        name: deploy_hpa
+      when: not skip_hpa|default(false)

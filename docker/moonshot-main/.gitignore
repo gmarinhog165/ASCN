@@ -1,0 +1,7 @@
+venv
+.venv
+.env
+.env.db
+.env.ci
+.python-version
+__pycache__

@@ -1,0 +1,185 @@
+- name: Gather all nodes in the cluster
+  kubernetes.core.k8s_info:
+    kind: Node
+  register: cluster_nodes
+  delegate_to: localhost
+
+- name: Scale down Moonshot Deployment to prevent Pod recreation
+  kubernetes.core.k8s:
+    state: present
+    kind: Deployment
+    api_version: apps/v1
+    name: moonshot-deployment
+    namespace: default
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: moonshot-deployment
+        namespace: default
+      spec:
+        replicas: 0
+  delegate_to: localhost
+
+- name: Wait for Moonshot Deployment Pods to terminate
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: default
+    label_selectors:
+      - app=moonshot-app
+  register: moonshot_pods
+  retries: 30
+  delay: 5
+  until: moonshot_pods.resources | length == 0
+
+- name: Delete Moonshot Deployment
+  kubernetes.core.k8s:
+    state: absent
+    kind: Deployment
+    api_version: apps/v1
+    name: moonshot-deployment
+    namespace: default
+  delegate_to: localhost
+
+- name: Delete DaemonSet to remove directory creation pods
+  kubernetes.core.k8s:
+    state: absent
+    kind: DaemonSet
+    api_version: apps/v1
+    name: create-mount-path
+    namespace: default
+  delegate_to: localhost
+
+- name: Wait for create-mount-path DaemonSet pods to be fully deleted
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: default
+    label_selectors:
+      - app=create-mount-path
+  register: create_mount_path_pods
+  retries: 20
+  delay: 5
+  until: create_mount_path_pods.resources | length == 0
+
+- name: Delete PostgreSQL Deployment
+  kubernetes.core.k8s:
+    state: absent
+    kind: Deployment
+    api_version: apps/v1
+    name: my-postgres
+    namespace: default
+  delegate_to: localhost
+
+- name: Wait for PostgreSQL Deployment Pods to terminate
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: default
+    label_selectors:
+      - app=my-postgres
+  register: postgres_pods
+  retries: 30
+  delay: 5
+  until: postgres_pods.resources | length == 0
+
+- name: Delete PostgreSQL PersistentVolumeClaim
+  kubernetes.core.k8s:
+    state: absent
+    kind: PersistentVolumeClaim
+    api_version: v1
+    name: postgres-pvc
+    namespace: default
+  delegate_to: localhost
+  when: delete_data | default(true) | bool
+
+- name: Verify PVC is deleted
+  shell: kubectl get pvc postgres-pvc -n default || echo "PVC deleted"
+  register: pvc_check
+  changed_when: false
+  when: delete_data | default(true) | bool
+
+- name: Gather PersistentVolumes in the cluster
+  kubernetes.core.k8s_info:
+    kind: PersistentVolume
+  register: persistent_volumes
+  delegate_to: localhost
+  when: delete_data | default(true) | bool
+
+- name: Delete PersistentVolumes
+  kubernetes.core.k8s:
+    state: absent
+    kind: PersistentVolume
+    api_version: v1
+    name: "{{ pv.metadata.name }}"
+  loop: "{{ persistent_volumes.resources }}"
+  loop_control:
+    loop_var: pv
+  delegate_to: localhost
+  when: delete_data | default(true) | bool
+
+- name: Create DaemonSet to clean up /mnt/data
+  kubernetes.core.k8s:
+    state: present
+    kind: DaemonSet
+    api_version: apps/v1
+    name: delete-mount-path
+    namespace: default
+    definition:
+      apiVersion: apps/v1
+      kind: DaemonSet
+      metadata:
+        name: delete-mount-path
+      spec:
+        selector:
+          matchLabels:
+            app: delete-mount-path
+        template:
+          metadata:
+            labels:
+              app: delete-mount-path
+          spec:
+            containers:
+            - name: delete-mount-path
+              image: busybox
+              command:
+                - "/bin/sh"
+                - "-c"
+                - "rm -rf /mnt/data"
+              volumeMounts:
+                - mountPath: /mnt/data
+                  name: data-volume
+            volumes:
+              - name: data-volume
+                hostPath:
+                  path: /mnt/data
+                  type: Directory
+  when: delete_data | default(true) | bool
+
+- name: Wait for DaemonSet to clean /mnt/data
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: default
+    label_selectors:
+      - app=delete-mount-path
+  register: delete_mount_path_pods
+  retries: 20
+  delay: 5
+  until: delete_mount_path_pods.resources | length > 0
+  when: delete_data | default(true) | bool
+
+- name: Delete DaemonSet after cleaning up /mnt/data
+  kubernetes.core.k8s:
+    state: absent
+    kind: DaemonSet
+    api_version: apps/v1
+    name: delete-mount-path
+    namespace: default
+  when: delete_data | default(true) | bool
+
+- name: Delete Moonshot Horizontal Pod Autoscaler
+  kubernetes.core.k8s:
+    state: absent
+    kind: HorizontalPodAutoscaler
+    api_version: autoscaling/v2
+    name: moonshot-hpa
+    namespace: default
+  delegate_to: localhost

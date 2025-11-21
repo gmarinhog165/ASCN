@@ -1,0 +1,36 @@
+- name: Create a Service to expose the moonshot application
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: moonshot-service
+        namespace: default
+      spec:
+        type: LoadBalancer
+        selector:
+          app: moonshot-app  # Updated to match Deployment's Pod label
+        ports:
+        - protocol: TCP
+          port: 8000
+          targetPort: 8000
+  register: service_creation_result
+
+- name: Wait for LoadBalancer Ingress IP to be assigned
+  command: kubectl get svc moonshot-service -n default --output=jsonpath='{.status.loadBalancer.ingress[0].ip}'
+  register: load_balancer_ip
+  retries: 30
+  delay: 10
+  until: load_balancer_ip.stdout != ""
+
+- name: Display the LoadBalancer Ingress IP
+  debug:
+    msg: "The LoadBalancer Ingress IP is {{ load_balancer_ip.stdout }}"
+
+- name: Update app_ip in YAML inventory file
+  ansible.builtin.lineinfile:
+    path: inventory/gcp.yml
+    regexp: '^(\s*app_ip:\s).*'
+    line: '    app_ip: {{ load_balancer_ip.stdout }}' 
+    backup: yes

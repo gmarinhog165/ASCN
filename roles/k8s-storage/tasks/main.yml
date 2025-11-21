@@ -1,0 +1,13 @@
+- name: Gather all nodes in the cluster
+  kubernetes.core.k8s_info:
+    kind: Node
+  register: cluster_nodes
+
+- name: Create a K8s Persistent Volume for each node
+  kubernetes.core.k8s:
+    definition: "{{ lookup('template', 'k8s-node-pv.yml') | replace('NODE_NAME', node_name) }}"
+  loop: "{{ cluster_nodes.resources | map(attribute='metadata.name') | list }}"
+  loop_control:
+    loop_var: node_name
+  vars:
+    pv_name: "pv-{{ node_name }}"

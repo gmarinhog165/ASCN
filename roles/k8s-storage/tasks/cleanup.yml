@@ -1,0 +1,25 @@
+- name: Delete PVs
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: PersistentVolume
+  register: pvs_info
+
+- name: Delete PVs
+  kubernetes.core.k8s:
+    state: absent
+    definition: "{{ item }}"
+  loop: "{{ pvs_info.resources }}"
+  when: item.metadata.annotations['volume.kubernetes.io/storage-class'] == 'local-storage'
+
+- name: Delete StorageClass
+  kubernetes.core.k8s:
+    state: absent
+    definition: "{{ lookup('template', 'k8s-sc.yml') }}"
+
+- name: Delete PVs folder on local node (if applicable)
+  become: true
+  ansible.builtin.file:
+    path: /mnt/data
+    state: absent
+  delegate_to: localhost
+  ignore_errors: true

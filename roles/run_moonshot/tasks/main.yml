@@ -1,0 +1,87 @@
+- name: Wait for the PostgreSQL pods to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: default
+    label_selectors:
+      - app=my-postgres
+  register: postgres_pod_status
+  until: postgres_pod_status.resources | selectattr('status.phase', 'equalto', 'Running') | list | length > 0
+  retries: 40
+  delay: 15
+
+- name: Deploy a Deployment for running the database setup and moonshot
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: moonshot-deployment
+        namespace: default
+        labels:
+          app: moonshot-app
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: moonshot-app
+        template:
+          metadata:
+            labels:
+              app: moonshot-app
+          spec:
+            containers:
+            - name: moonshot-container
+              image: hvaz18/ascn:latest
+              env:
+              - name: DB_NAME
+                value: "{{ postgres_db }}"
+              - name: DB_USER
+                value: "{{ postgres_user }}"
+              - name: DB_PASSWORD
+                value: "{{ postgres_password }}"
+              - name: DB_HOST
+                value: "my-postgres-service.default.svc.cluster.local"  # Replace `default` if needed for another namespace
+              - name: DB_PORT
+                value: "5432"
+              ports:
+              - containerPort: 8000
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "128Mi"
+
+              readinessProbe:
+                httpGet:
+                  path: /api/health
+                  port: 8000
+                initialDelaySeconds: 10
+                periodSeconds: 5
+  register: moonshot_deployment_creation
+
+- name: Wait for the moonshot-deployment pods to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: default
+    label_selectors:
+      - app=moonshot-app
+  register: moonshot_pod_status
+  until: moonshot_pod_status.resources | selectattr('status.phase', 'equalto', 'Running') | list | length > 0
+  retries: 20
+  delay: 10
+
+- name: Get the PostgreSQL service information
+  kubernetes.core.k8s_info:
+    kind: Service
+    name: my-postgres-service
+    namespace: default
+  register: postgres_service
+
+- name: Check if PostgreSQL service information was gathered
+  fail:
+    msg: "PostgreSQL service information could not be retrieved. Please verify the service name and namespace."
+  when: postgres_service.resources | length == 0
+
+- name: Confirm that the moonshot-deployment is successfully running
+  debug:
+    msg: "Deployment moonshot-deployment created with DockerHub image and application started."

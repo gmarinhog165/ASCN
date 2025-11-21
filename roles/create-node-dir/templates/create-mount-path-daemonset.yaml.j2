@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: create-mount-path
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: create-mount-path
+  template:
+    metadata:
+      labels:
+        app: create-mount-path
+    spec:
+      containers:
+      - name: create-mount-path
+        image: busybox
+        command: ["sh", "-c", "mkdir -p /mnt/data && echo 'Directory created'"]
+        volumeMounts:
+        - mountPath: /mnt/data
+          name: host-mount
+        securityContext:
+          runAsUser: 0  # Run as root to ensure directory creation succeeds
+      hostNetwork: true
+      hostPID: true
+      volumes:
+      - name: host-mount
+        hostPath:
+          path: /mnt/data
+          type: DirectoryOrCreate

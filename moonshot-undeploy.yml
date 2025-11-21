@@ -1,0 +1,9 @@
+---
+# Playbook to undeploy Moonshot and its components
+# TO DO
+
+- name: Undeploy all components related to Moonshot and PostgreSQL
+  hosts: localhost
+  gather_facts: no
+  roles:
+    - role: undeploy-all

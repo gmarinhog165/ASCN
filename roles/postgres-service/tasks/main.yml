@@ -1,0 +1,4 @@
+- name: Create PostgreSQL Service
+  kubernetes.core.k8s:
+    definition: "{{ lookup('template', 'postgres-service.yml.j2') }}"
+  delegate_to: localhost

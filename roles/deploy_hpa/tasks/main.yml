@@ -1,0 +1,4 @@
+- name: Deploy HPA
+  kubernetes.core.k8s:
+    definition: "{{ lookup('template', 'hpa_deploy.yml.j2') }}"
+  delegate_to: localhost

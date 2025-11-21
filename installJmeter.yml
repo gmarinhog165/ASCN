@@ -1,0 +1,59 @@
+---
+- name: Playbook to prepare system for JMeter
+  hosts: localhost
+  gather_facts: yes
+  become: yes
+
+  tasks:
+    - name: Ensure required tools are installed
+      apt:
+        name:
+          - wget
+          - tar
+        state: present
+
+    - name: Download OpenJDK 19 tarball
+      get_url:
+        url: https://download.java.net/openjdk/jdk19/ri/openjdk-19+36_linux-x64_bin.tar.gz
+        dest: /tmp/openjdk-19.tar.gz
+
+    - name: Extract OpenJDK 19
+      unarchive:
+        src: /tmp/openjdk-19.tar.gz
+        dest: /usr/lib/jvm
+        remote_src: yes
+        creates: /usr/lib/jvm/jdk-19
+
+    - name: Set OpenJDK 19 as the default Java version
+      shell: |
+        update-alternatives --install /usr/bin/java java /usr/lib/jvm/jdk-19/bin/java 1
+        update-alternatives --install /usr/bin/javac javac /usr/lib/jvm/jdk-19/bin/javac 1
+        update-alternatives --set java /usr/lib/jvm/jdk-19/bin/java
+        update-alternatives --set javac /usr/lib/jvm/jdk-19/bin/javac
+      args:
+        executable: /bin/bash
+
+    - name: Ensure JMeter directory exists
+      file:
+        path: /opt/jmeter
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Download Apache JMeter 5.6.3
+      get_url:
+        url: https://dlcdn.apache.org/jmeter/binaries/apache-jmeter-5.6.3.tgz
+        dest: /opt/jmeter/apache-jmeter-5.6.3.tgz
+
+    - name: Extract JMeter if not already extracted
+      unarchive:
+        src: /opt/jmeter/apache-jmeter-5.6.3.tgz
+        dest: /opt/jmeter/
+        remote_src: yes
+        creates: /opt/jmeter/apache-jmeter-5.6.3
+
+    - name: Copy MoonshotTesSimpl.jmx to JMeter directory
+      copy:
+        src: "{{ playbook_dir }}/MoonshotTesSimpl.jmx"
+        dest: /opt/jmeter/apache-jmeter-5.6.3/bin/MoonshotTesSimpl.jmx

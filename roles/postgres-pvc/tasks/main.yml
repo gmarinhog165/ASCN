@@ -1,0 +1,4 @@
+- name: Create PostgreSQL Persistent Volume Claim
+  kubernetes.core.k8s:
+    definition: "{{ lookup('template', 'postgres-pvc.yml.j2') }}"
+  delegate_to: localhost

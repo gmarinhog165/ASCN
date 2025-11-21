@@ -1,0 +1,4 @@
+- name: Deploy DaemonSet to create directory on all nodes
+  kubernetes.core.k8s:
+    definition: "{{ lookup('template', 'create-mount-path-daemonset.yaml.j2') }}"
+  delegate_to: localhost

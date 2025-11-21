@@ -1,0 +1,9 @@
+---
+- name: Create Dashboard on Gcloud
+  hosts: localhost
+  gather_facts: false
+  vars:
+    dashboard_file: "dashboard.json"
+  tasks:
+    - name: Add monitoring dashboard to project
+      command: gcloud monitoring dashboards --project="{{ gcp_project }}" create --config-from-file="{{ dashboard_file }}"

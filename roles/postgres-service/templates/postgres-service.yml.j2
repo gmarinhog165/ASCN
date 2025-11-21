@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-postgres-service
+  namespace: default
+
+spec:
+  selector:
+    app: my-postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+      nodePort: 30000
+  type: NodePort
